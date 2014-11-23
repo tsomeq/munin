@@ -1,0 +1,442 @@
+#!@@GOODSH@@
+# -*- sh -*-
+# vim: set ft=javascript :
+# /*
+
+: << =cut
+
+=head1 NAME
+
+jmx - Simple Customization-friendly plugin to monitor Java application servers via JMX
+
+=head1 APPLICABLE SYSTEMS
+
+Tested with Sun JVM 6/7.  
+
+Any JVM that supports JMX should in theory do.
+
+To use with openJDK you need Mozilla Rhino library.
+
+Needs nc in path for autoconf.
+
+=head1 CONFIGURATION
+
+Client side
+
+  Please edit directly this file to specify how to connect the server.
+  SERVER_IP, SERVER_PORT, etc.
+  You can copy this script as you want to watch many server applications. 
+
+Needed configuration on the Server side: add
+
+  -Dcom.sun.management.jmxremote \
+  -Dcom.sun.management.jmxremote.port=5400 \
+  -Dcom.sun.management.jmxremote.ssl=false \
+  -Dcom.sun.management.jmxremote.authenticate=false
+
+If the server is tomcat, add CATALINA_OPTS in your startup scripts.
+
+Replace authenticate=false with 
+  -Dcom.sun.management.jmxremote.password.file=/etc/tomcat/jmxremote.password \
+  -Dcom.sun.management.jmxremote.access.file=/etc/tomcat/jmxremote.access
+ ...if you want authentication.
+
+jmxremote.password:
+ monitorRole SomethingSecret
+
+jmxremote.access:
+ monitorRole readonly
+
+You may need higher access levels for some counters, notably ThreadsDeadlocked.
+
+=head1 BUGS
+
+No encryption supported in the JMX connection.
+
+The plugins available reflect the most interesting aspects of a
+JVM runtime.  This should be extended to cover things specific to
+Tomcat, JBoss, Glassfish and so on.  Patches welcome.
+
+=head1 AUTHORS
+
+=encoding UTF-8
+
+Mo Amini, Diyar Amin and Younes Hajji, Høgskolen i Oslo/Oslo
+University College.
+
+Shell script wrapper and integration by Erik Inge Bolsø, Redpill
+Linpro AS.
+
+Previous work on JMX plugin by Aleksey Studnev. Support for
+authentication added by Ingvar Hagelund, Redpill Linpro AS.
+
+=head1 LICENSE
+
+GPLv2
+
+=head1 MAGIC MARKERS
+
+ #%# family=auto
+ #%# capabilities=autoconf suggest
+
+=cut
+
+JAVA_BIN=/usr/java/latest/bin/java
+JAVA_OPTS=-Xincgc
+SERVER_IP=127.0.0.1
+SERVER_PORT=5400
+
+JMXURL=rmi://$SERVER_IP:$SERVER_PORT/jmxrmi
+CLASSPATH=/usr/java/latest/lib/tools.jar
+RHINO_CLASS=com.sun.tools.script.shell.Main
+username=
+password=
+
+if [ ".$1" = ".suggest" ] ; then
+  echo MultigraphAll
+  exit 0
+fi
+
+if [ ".$1" = ".autoconf" ] ; then
+    NC=`which nc 2>/dev/null`
+    if [ ".$NC" = "." ] ; then
+      echo "no (nc not found)"
+      exit 0
+    fi
+    $NC -n -z $SERVER_IP $SERVER_PORT >/dev/null 2>&1
+    CONNECT=$?
+
+    $JAVA_BIN -? >/dev/null 2>&1
+    JAVA=$?
+    if [ $JAVA -ne 0 ] ; then
+      echo "no (java runtime not found at $JAVA_BIN)"
+      exit 0
+    fi
+
+    if [ $CONNECT -eq 0 ] ; then
+      echo "yes"
+      exit 0
+    else
+      echo "no (connection to $SERVER_IP:$SERVER_PORT failed)"
+      exit 0
+    fi
+fi
+
+
+if [ ".$1" = ".config" ]; then
+	cat << ___END___
+#________________________________________________________________________________________________________________________
+multigraph Eden
+graph_title JVM MemoryEdenUsage+
+graph_vlabel bytes
+graph_category jvm
+graph_info Returns an estimate of the memory usage of this memory pool. ($JMXURL)
+Max.label Max
+Max.info Test.
+Max.draw AREA
+Max.colour ccff88
+Committed.label Committed
+Committed.info The amount of memory (in bytes) that is guaranteed to be available for use by the Java virtual machine.
+Committed.draw LINE
+Committed.colour 0033ff
+Init.label Init
+Init.info The initial amount of memory (in bytes) that the Java virtual machine requests from the operating system for memory management during startup.
+Used.label Used
+Used.info The amount of memory currently used (in bytes).
+Used.draw LINE
+Used.colour 33cc00
+Threshold.label Threshold
+Threshold.info The usage threshold value of this memory pool in bytes.
+
+PostGC.label PostGC
+PostGC.info represents the amount of memory currently used (in bytes). Contains reflective data of the JVM itself, including class and memory objects
+PostGC.draw LINE
+PostGC.colour 000000
+
+Peak.label Peak
+Peak.info The amount of memory currently used (in bytes). Returns the peak memory usage of this memory pool since the Java virtual machine was started or since the peak was reset.
+Peak.draw LINE
+Peak.colour 006600
+#________________________________________________________________________________________________________________________
+
+multigraph PermGen
+graph_title JVM MemoryPermGenUsage+
+graph_vlabel bytes
+graph_category jvm
+graph_info Returns an estimate of the memory usage of this memory pool.($JMXURL)
+Max.label Max
+Max.info Test.
+Max.draw AREA
+Max.colour ccff88
+Committed.label Committed
+Committed.info The amount of memory (in bytes) that is guaranteed to be available for use by the Java virtual machine.
+Committed.draw LINE
+Committed.colour 0033ff
+Init.label Init
+Init.info The initial amount of memory (in bytes) that the Java virtual machine requests from the operating system for memory management during startup.
+Used.label Used
+Used.info The amount of memory currently used (in bytes).
+Used.draw LINE
+Used.colour 33cc00
+Threshold.label Threshold
+Threshold.info The usage threshold value of this memory pool in bytes.
+
+PostGC.label PostGC
+PostGC.info represents the amount of memory currently used (in bytes). Contains reflective data of the JVM itself, including class and memory objects
+PostGC.draw LINE
+PostGC.colour 000000
+
+Peak.label Peak
+Peak.info The amount of memory currently used (in bytes). Returns the peak memory usage of this memory pool since the Java virtual machine was started or since the peak was reset.
+Peak.draw LINE
+Peak.colour 006600
+#________________________________________________________________________________________________________________________
+
+multigraph Tenured
+graph_title JVM MemoryTenuredGenUsage+
+graph_vlabel bytes
+graph_category jvm
+graph_info Returns an estimate of the memory usage of this memory pool.($JMXURL)
+Max.label Max
+Max.info Test.
+Max.draw AREA
+Max.colour ccff88
+Committed.label Committed
+Committed.info The amount of memory (in bytes) that is guaranteed to be available for use by the Java virtual machine.
+Committed.draw LINE
+Committed.colour 0033ff
+Init.label Init
+Init.info The initial amount of memory (in bytes) that the Java virtual machine requests from the operating system for memory management during startup.
+Used.label Used
+Used.info The amount of memory currently used (in bytes).
+Used.draw LINE
+Used.colour 33cc00
+Threshold.label Threshold
+Threshold.info The usage threshold value of this memory pool in bytes.
+
+PostGC.label PostGC
+PostGC.info represents the amount of memory currently used (in bytes). Contains reflective data of the JVM itself, including class and memory objects
+PostGC.draw LINE
+PostGC.colour 6666ff
+
+Peak.label Peak
+Peak.info The amount of memory currently used (in bytes). Returns the peak memory usage of this memory pool since the Java virtual machine was started or since the peak was reset.
+Peak.draw LINE
+Peak.colour ff6666
+#________________________________________________________________________________________________________________________
+
+multigraph Survivor
+graph_title JVM MemorySurvivorUsage+
+graph_vlabel bytes
+graph_category jvm
+graph_info Returns an estimate of the memory usage of this memory pool.($JMXURL)
+Max.label Max
+Max.info Test.
+Max.draw AREA
+Max.colour ccff88
+Committed.label Committed
+Committed.info The amount of memory (in bytes) that is guaranteed to be available for use by the Java virtual machine.
+Committed.draw LINE
+Committed.colour 0033ff
+Init.label Init
+Init.info The initial amount of memory (in bytes) that the Java virtual machine requests from the operating system for memory management during startup.
+Used.label Used
+Used.info The amount of memory currently used (in bytes).
+Used.draw LINE
+Used.colour 33cc00
+Threshold.label Threshold
+Threshold.info The usage threshold value of this memory pool in bytes.
+
+PostGC.label PostGC
+PostGC.info represents the amount of memory currently used (in bytes). Contains reflective data of the JVM itself, including class and memory objects
+PostGC.draw LINE
+PostGC.colour 6666ff
+
+Peak.label Peak
+Peak.info The amount of memory currently used (in bytes). Returns the peak memory usage of this memory pool since the Java virtual machine was started or since the peak was reset.
+Peak.draw LINE
+Peak.colour ff6666
+#________________________________________________________________________________________________________________________
+
+multigraph CodeCache
+graph_title JVM MemoryCodeCacheUsage+
+graph_vlabel bytes
+graph_category jvm
+graph_info Returns an estimate of the memory usage of this memory pool.($JMXURL)
+Max.label Max
+Max.info Test.
+Max.draw AREA
+Max.colour ccff88
+Committed.label Committed
+Committed.info The amount of memory (in bytes) that is guaranteed to be available for use by the Java virtual machine.
+Committed.draw LINE
+Committed.colour 0033ff
+Init.label Init
+Init.info The initial amount of memory (in bytes) that the Java virtual machine requests from the operating system for memory management during startup.
+Used.label Used
+Used.info The amount of memory currently used (in bytes).
+Used.draw LINE
+Used.colour 33cc00
+Threshold.label Threshold
+Threshold.info The usage threshold value of this memory pool in bytes.
+
+PostGC.label PostGC
+PostGC.info represents the amount of memory currently used (in bytes). Contains reflective data of the JVM itself, including class and memory objects
+PostGC.draw LINE
+PostGC.colour 6666ff
+
+Peak.label Peak
+Peak.info The amount of memory currently used (in bytes). Returns the peak memory usage of this memory pool since the Java virtual machine was started or since the peak was reset.
+Peak.draw LINE
+Peak.colour ff6666
+#________________________________________________________________________________________________________________________
+
+multigraph ThreadStates
+graph_title JVM Threads
+graph_vlabel threads
+graph_category jvm
+graph_info Returns the current number of live threads including both daemon and non-daemon threads.($JMXURL)
+Threads.label Threads
+Threads.type  GAUGE
+Threads.colour  00bb00
+
+ThreadsDaemon.label ThreadsDaemon
+ThreadsDaemon.info  Returns the current number of live daemon threads.
+ThreadsDaemon.type  GAUGE
+ThreadsDaemon.colour  0000ff
+
+ThreadsDeadlocked.info Returns the number of deadlocked threads for the JVM. Usually not available at readonly access level.
+ThreadsDeadlocked.label ThreadsDeadlocked
+ThreadsDeadlocked.type  GAUGE
+ThreadsDeadlocked.colour  ff0000
+
+ThreadsPeak.label ThreadsPeak
+ThreadsPeak.type  GAUGE
+ThreadsPeak.colour  ff6600
+#________________________________________________________________________________________________________________________
+___END___
+exit 0
+fi
+
+
+cat << __END__ | $JAVA_BIN $JAVA_OPTS -cp $CLASSPATH $RHINO_CLASS -f /dev/stdin 
+
+////////////////////////////////////////////////////////// */
+var JMXURL = "$JMXURL";
+DEBUG  = "$MUNIN_DEBUG";
+var password  = "$password";
+var username  = "$username";
+
+JMan  = java.lang.management;
+JMX  = javax.management;
+JUtil = java.util;
+
+var jurlo  = new JMX.remote.JMXServiceURL("service:jmx:rmi:///jndi/"+JMXURL+"");
+var cred   = new JUtil.HashMap();
+var strarr = new java.lang.reflect.Array.newInstance(java.lang.String, 0);
+if (password != "" && username != "") {
+	var nameAndPass = new java.util.ArrayList();
+	nameAndPass.add(username);
+	nameAndPass.add(password);
+	cred.put(javax.management.remote.JMXConnector.CREDENTIALS, nameAndPass.toArray(strarr));
+}
+var jconn = JMX.remote.JMXConnectorFactory.connect(jurlo, cred);
+var sconn = jconn.getMBeanServerConnection();
+var out = java.lang.System.out ;
+
+if (DEBUG) out.println("# sconn:"+sconn);
+
+var mxResult = {}; // finally result
+
+appendThreadState(mxResult);
+appendMemStates(mxResult);
+
+if (DEBUG) out.println("#  ------------ result output stated ------------ ");
+
+for (var topLabel in mxResult)
+{
+	// Printing each part of multigraph.
+	// "topLabel" means multigraph name like "Eden", "Tenured", "Threads", etc.
+	out.println("multigraph "+topLabel);
+	for (var subKey in mxResult[topLabel]) {
+		out.println(subKey+".value "+ mxResult[topLabel][subKey]);
+	}
+	out.println("");
+}
+
+////
+
+function appendMemStates(mxResult)
+{ // getting memory pool
+	var objectNames = {
+		// JMan.ManagementFactory.MEMORY_POOL_MXBEAN_DOMAIN_TYPE + ,name=*
+		"java.lang:type=MemoryPool,name=CMS Old Gen"        : "Tenured"  ,
+		"java.lang:type=MemoryPool,name=Par Eden Space"     : "Eden"     ,
+		"java.lang:type=MemoryPool,name=CMS Perm Gen"       : "PermGen"  ,
+		"java.lang:type=MemoryPool,name=Par Survivor Space" : "Survivor" ,
+		"java.lang:type=MemoryPool,name=Code Cache"         : "CodeCache"
+	};
+
+	for(var mxNmStr in objectNames)
+	{
+		var aMemMXName = new JMX.ObjectName(mxNmStr);
+		if (DEBUG) out.println("# aMemMXName:"+aMemMXName);
+		if (DEBUG) out.println("# "+sconn.getObjectInstance(aMemMXName));
+
+		var usage = sconn.getAttribute(aMemMXName, "Usage");
+		if (!usage) continue;
+
+		var result = {};
+		mxResult[objectNames[mxNmStr]] = result;
+
+		if (DEBUG) out.println("# usage:"+usage);
+		result["Init"]      = usage.get("init"     );
+		result["Committed"] = usage.get("committed");
+		result["Max"]       = usage.get("max"      );
+		result["Used"]      = usage.get("used"     );
+		try {
+			var threshold = sconn.getAttribute(aMemMXName, "UsageThreshold"); // man be not supported
+			result["Threshold"] = threshold;
+		} catch (ex ) {
+			result["Threshold"] = "U"; // Unknown
+		}
+
+		var collection = sconn.getAttribute(aMemMXName, "CollectionUsage");
+		if (DEBUG) out.println("# collection:"+collection);
+		if (collection) {
+			result["PostGC"]      = collection.get("used");
+		}
+
+		var peakUsage = sconn.getAttribute(aMemMXName, "PeakUsage");
+		if (DEBUG) out.println("# peakUsage:"+peakUsage);
+		if (peakUsage) {
+			result["Peak"]      = peakUsage.get("used");
+		}
+	}
+}
+
+
+function appendThreadState(mxResult)
+{
+	var mxbean = JMan.ManagementFactory.newPlatformMXBeanProxy(sconn, JMan.ManagementFactory.THREAD_MXBEAN_NAME, JMan.ThreadMXBean);
+	if (DEBUG) out.println("thread mxbean:" + mxbean);
+
+	var result = {};
+	mxResult["ThreadStates"] = result;
+	if (mxbean) {
+		result["Threads"      ] = mxbean.getThreadCount();
+		result["ThreadsPeak"  ] = mxbean.getPeakThreadCount();
+		result["ThreadsDaemon"] = mxbean.getDaemonThreadCount();
+
+		var ids = mxbean.findDeadlockedThreads();
+		if (ids) {
+			result["ThreadsDeadlocked"] = ids.length();
+		} else {
+			result["ThreadsDeadlocked"] = 0;
+		}
+	}
+}
+
+
+__END__
+
